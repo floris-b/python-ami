@@ -1,5 +1,6 @@
 import re
 import socket
+import ssl
 import threading
 from functools import partial
 
@@ -55,7 +56,7 @@ class AMIClient(object):
 
     def __init__(self, address='127.0.0.1', port=5038,
                  encoding='utf-8', encoding_errors='replace',
-                 timeout=3, buffer_size=2 ** 10,
+                 timeout=3, buffer_size=2 ** 10, ssl=False, checkcert=False, ca=False,
                  **kwargs):
         self._action_counter = 0
         self._futures = {}
@@ -63,6 +64,9 @@ class AMIClient(object):
         self._event_listeners = []
         self._address = address
         self._buffer_size = buffer_size
+        self._ssl = ssl
+        self._checkcert = checkcert
+        self._ca = ca
         self._port = port
         self._socket = None
         self._thread = None
@@ -80,8 +84,22 @@ class AMIClient(object):
         return str(id)
 
     def connect(self):
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._socket.settimeout(self._timeout)
+        if self._ssl:
+           with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+              sock.settimeout(self._timeout)
+              context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+              if not self._checkcert:
+                 context.check_hostname = False
+                 context.verify_mode = ssl.CERT_NONE
+              elif self._ca:
+                 context.verify_mode = ssl.CERT_REQUIRED
+                 context.load_verify_locations(self._ca)
+
+              self._socket = context.wrap_socket(sock, server_hostname=self._address)
+        else:
+           self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+           self._socket.settimeout(self._timeout)
+            
         self._socket.connect((self._address, self._port))
         self.finished = threading.Event()
         self._thread = threading.Thread(target=self.listen)
