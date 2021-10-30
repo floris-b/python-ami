@@ -86,7 +86,7 @@ class AMIClient(object):
     def connect(self):
         if self._ssl:
            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-              sock.settimeout(self._timeout)
+              sock.setblocking(True)
               context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
               if not self._checkcert:
                  context.check_hostname = False
